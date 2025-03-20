@@ -19,43 +19,39 @@
                           "C-c C-c" #'steamacs-run-game
                           "RET" #'steamacs-run-game))
 
+(defun steamacs-refresh ()
+  (let* ((steamapps-directory (expand-file-name "steamapps" steamacs-path))
+         (acf-files (seq-filter (lambda (a) (string-match (rx ".acf" eol) a))
+                                (directory-files steamapps-directory)))
+         (cache-directory (expand-file-name "appcache/librarycache" steamacs-path))
+         (appid-rx (rx "appid" (+ nonl) "\"" (group (+ numeric)) "\""))
+         (name-rx (rx "name" (+ nonl) "\"" (group (+ nonl)) "\"")))
+    (cl-loop for file in acf-files
+             for content = (with-temp-buffer
+                             (insert-file-contents (expand-file-name file
+                                                                     steamapps-directory))
+                             (buffer-string))
+             for appid = (progn (string-match appid-rx content)
+                                (substring-no-properties (match-string 1 content)))
+             for name = (progn (string-match name-rx content)
+                               (substring-no-properties (match-string 1 content)))
+             for image = `(image . (:type jpeg
+                                          :file ,(format "%s/%s/library_hero.jpg"
+                                                         cache-directory
+                                                         appid)
+                                          :height 50
+                                          :width 200))
+             collect (list appid (vector name image)) into .tabulated-list-entries
+             maximize (length name) into name-len
+             finally (setf tabulated-list-entries .tabulated-list-entries
+                           tabulated-list-format (vector (list "Name" name-len t
+                                                               :right-align t)
+                                                         (list "Image" 1 t))
+                           tabulated-list-printer (lambda (a cols)
+                                                    (tabulated-list-print-entry a cols)))))
+  (tabulated-list-init-header))
+
 (define-derived-mode steamacs-mode tabulated-list-mode "stEaMACS"
   :interactive nil
-  (setf tabulated-list-entries
-        (lambda nil
-          (let* ((steamapps-directory (expand-file-name "steamapps" steamacs-path))
-                 (acf-files (seq-filter (lambda (a) (string-match (rx ".acf" eol) a))
-                                        (directory-files steamapps-directory)))
-                 (cache-directory (expand-file-name "appcache/librarycache" steamacs-path))
-                 (appid-rx (rx "appid"
-                               (+ nonl)
-                               "\""
-                               (group (+ numeric))
-                               "\""))
-                 (name-rx (rx "name"
-                              (+ nonl)
-                              "\""
-                              (group (+ nonl))
-                              "\"")))
-            (cl-loop for file in acf-files
-                     for content = (with-temp-buffer
-                                     (insert-file-contents (expand-file-name file
-                                                                             steamapps-directory))
-                                     (buffer-string))
-                     for appid = (progn (string-match appid-rx content)
-                                        (substring-no-properties (match-string 1 content)))
-                     for name = (progn (string-match name-rx content)
-                                       (substring-no-properties (match-string 1 content)))
-                     for image = `(image . (:type jpeg
-                                                  :file ,(format "%s/%s/library_hero.jpg"
-                                                                 cache-directory
-                                                                 appid)
-                                                  :height 50
-                                                  :width 200))
-                     collect (list appid (vector name image))))))
-  (setf tabulated-list-format [ ( "Name" 50 t
-                                  :right-align t)
-                                ( "Image" 1 t)])
-  (setf tabulated-list-printer (lambda (a cols)
-                                 (tabulated-list-print-entry a cols)))
-  (tabulated-list-init-header))
+  (add-hook 'tabulated-list-revert-hook #'steamacs-refresh nil t)
+  (steamacs-refresh))
