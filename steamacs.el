@@ -1,5 +1,6 @@
 (defvar steamacs-path (expand-file-name "Steam" (xdg-data-home)))
 
+;;;###autoload
 (defun steamacs ()
   (interactive)
   (switch-to-buffer (get-buffer-create "*steamacs*"))
